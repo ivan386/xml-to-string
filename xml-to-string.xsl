@@ -8,19 +8,27 @@ Redistribution and use in source and binary forms, with or without modification,
     * Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
     * Neither the name of Lenz Consulting Group nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 
-	    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+      THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Recent changes:
 
+2020-07-26: Added test for namespace axis support and write-namespaces call (ivan386)
 2010-06-10: Added the $force-exclude-all-namespaces parameter
 2009-10-19: Added the $exclude-these-namespaces parameter 
 2009-10-08: Added $att-value parameter and template name to template rule for attributes.
 
 -->
 <xsl:stylesheet version="1.0"
+  xmlns:exsl="http://exslt.org/common"
   xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
 
   <xsl:output omit-xml-declaration="yes"/>
+
+  <xsl:include href="write-namespaces.xsl" />
+
+  <!-- test namespace axis (it not supported in firefox) -->
+  <xsl:param name="test-namespace-axis-xml"><root xmlns="test" /></xsl:param>
+  <xsl:param name="use-namespace-uri" select="not(exsl:node-set($test-namespace-axis-xml)/*[namespace::*])"/>
 
   <xsl:param name="use-empty-syntax" select="true()"/>
   <xsl:param name="exclude-unused-prefixes" select="true()"/>
@@ -75,12 +83,20 @@ Recent changes:
     </xsl:call-template>
     <xsl:apply-templates select="@*" mode="xml-to-string"/>
     <xsl:if test="not($force-exclude-all-namespaces)">
-      <xsl:for-each select="namespace::*">
-        <xsl:call-template name="process-namespace-node">
-          <xsl:with-param name="element" select="$element"/>
-          <xsl:with-param name="depth" select="$depth"/>
-        </xsl:call-template>
-      </xsl:for-each>
+      <xsl:choose>
+        <!-- for firefox -->
+        <xsl:when test="$use-namespace-uri">
+          <xsl:call-template name="write-namespaces"/>
+        </xsl:when>
+        <xsl:otherwise>
+          <xsl:for-each select="namespace::*">
+            <xsl:call-template name="process-namespace-node">
+              <xsl:with-param name="element" select="$element"/>
+              <xsl:with-param name="depth" select="$depth"/>
+            </xsl:call-template>
+          </xsl:for-each>
+        </xsl:otherwise>
+      </xsl:choose>
     </xsl:if>
     <xsl:choose>
       <xsl:when test="node() or not($use-empty-syntax)">
@@ -120,21 +136,30 @@ Recent changes:
     <xsl:variable name="force-include" select="$is-used-on-this-element and (. = $namespaces-to-exclude)"/>
 
     <xsl:if test="(name() != 'xml') and ($force-include or (not($exclude-ns) and not(string($declaredAbove))))">
-      <xsl:value-of select="$space"/>
-      <xsl:value-of select="$ns-decl"/>
-      <xsl:if test="name()">
-        <xsl:value-of select="$colon"/>
-        <xsl:call-template name="ns-prefix">
-          <xsl:with-param name="text" select="name()"/>
-        </xsl:call-template>
-      </xsl:if>
-      <xsl:value-of select="$equals"/>
-      <xsl:value-of select="$attribute-delimiter"/>
-      <xsl:call-template name="ns-uri">
-        <xsl:with-param name="text" select="string(.)"/>
+      <xsl:call-template name="write-namespace">
+        <xsl:with-param name="prefix" select="name()"/>
+        <xsl:with-param name="uri" select="string(.)"/>
       </xsl:call-template>
-      <xsl:value-of select="$attribute-delimiter"/>
     </xsl:if>
+  </xsl:template>
+
+  <xsl:template name="write-namespace">
+    <xsl:param name="prefix"/>
+    <xsl:param name="uri"/>
+    <xsl:value-of select="$space"/>
+    <xsl:value-of select="$ns-decl"/>
+    <xsl:if test="$prefix">
+      <xsl:value-of select="$colon"/>
+      <xsl:call-template name="ns-prefix">
+        <xsl:with-param name="text" select="$prefix"/>
+      </xsl:call-template>
+    </xsl:if>
+    <xsl:value-of select="$equals"/>
+    <xsl:value-of select="$attribute-delimiter"/>
+    <xsl:call-template name="ns-uri">
+      <xsl:with-param name="text" select="$uri"/>
+    </xsl:call-template>
+  <xsl:value-of select="$attribute-delimiter"/>
   </xsl:template>
 
   <xsl:template name="isDeclaredAbove">
